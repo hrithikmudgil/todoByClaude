@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Npgsql;
 using TodoApi.Data;
 using TodoApi.Features.Auth;
+using TodoApi.Features.Todos;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,6 +12,10 @@ builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.AddValidation();
 builder.Services.AddSingleton<PasswordService>();
+
+// By default Development *throws* on unbindable input (malformed JSON, bad query values), which our
+// exception handler would turn into a 500, while other environments return 400. Always answer 400.
+builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = false);
 
 // Cookie auth: the browser never exposes the credential to JS, and the SPA is same-origin via the dev proxy.
 builder.Services
@@ -89,6 +94,7 @@ app.MapGet("/api/health", async (NpgsqlDataSource dataSource, CancellationToken 
 });
 
 app.MapAuthEndpoints();
+app.MapTodoEndpoints();
 
 app.Run();
 

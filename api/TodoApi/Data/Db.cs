@@ -18,6 +18,7 @@ public static class Db
             NpgsqlDataSource.Create(sp.GetRequiredService<IConfiguration>().GetRequiredConnectionString()));
 
         services.AddSingleton<UserRepository>();
+        services.AddSingleton<TodoRepository>();
 
         return services;
     }
