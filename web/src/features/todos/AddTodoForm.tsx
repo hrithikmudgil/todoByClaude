@@ -3,8 +3,8 @@ import styles from './todos.module.css'
 
 interface Props {
   pending: boolean
-  /** Called with the trimmed title; call `done` to clear the field once the todo was saved. */
-  onAdd: (title: string, done: () => void) => void
+  /** Called with the trimmed title. Call `restore` if saving fails so the text isn't lost. */
+  onAdd: (title: string, restore: () => void) => void
 }
 
 export function AddTodoForm({ pending, onAdd }: Props) {
@@ -14,7 +14,12 @@ export function AddTodoForm({ pending, onAdd }: Props) {
   function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!trimmed) return
-    onAdd(trimmed, () => setTitle(''))
+
+    // Clear straight away rather than when the server answers: waiting would wipe whatever
+    // the person typed for their *next* todo while this one was still saving.
+    setTitle('')
+    // On failure, put the text back, unless they've already started typing something else.
+    onAdd(trimmed, () => setTitle((current) => current || trimmed))
   }
 
   return (

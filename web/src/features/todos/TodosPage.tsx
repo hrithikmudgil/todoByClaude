@@ -65,7 +65,7 @@ export default function TodosPage() {
       <main className={styles.panel}>
         <AddTodoForm
           pending={create.isPending}
-          onAdd={(title, done) => create.mutate(title, { onSuccess: done })}
+          onAdd={(title, restore) => create.mutate(title, { onError: restore })}
         />
 
         {failed && (

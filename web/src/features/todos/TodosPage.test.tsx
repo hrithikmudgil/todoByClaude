@@ -45,6 +45,43 @@ describe('TodosPage', () => {
     expect(api.state.bodies['POST /api/todos']).toEqual({ title: 'Write tests' })
   })
 
+  it('keeps what you type for the next todo while the previous one is still saving', async () => {
+    const { user } = setup()
+    await screen.findByText('Buy milk')
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    server.use(
+      http.post('/api/todos', async () => {
+        await gate
+        return HttpResponse.json(makeTodo({ title: 'First' }), { status: 201 })
+      }),
+    )
+
+    const input = screen.getByLabelText('New todo')
+    await user.type(input, 'First')
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+    expect(input).toHaveValue('') // cleared on submit, not on response
+
+    await user.type(input, 'Second')
+    release() // the first response arrives now
+
+    await waitFor(() => expect(items()[0]).toHaveTextContent('First'))
+    expect(input).toHaveValue('Second')
+  })
+
+  it('puts the text back if adding fails, unless something new was typed', async () => {
+    const { user } = setup()
+    await screen.findByText('Buy milk')
+    server.use(http.post('/api/todos', () => problem(500, 'Server error', 'Could not save.')))
+    const input = screen.getByLabelText('New todo')
+
+    await user.type(input, 'Important thing')
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not save.')
+    expect(input).toHaveValue('Important thing')
+  })
+
   it('does not allow adding a blank todo', async () => {
     const { user } = setup()
     await screen.findByText('Buy milk')

@@ -94,6 +94,7 @@ textarea {
   min-height: 2.5rem;
   padding: 0.5rem 1rem;
   font-weight: 600;
+  white-space: nowrap;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
