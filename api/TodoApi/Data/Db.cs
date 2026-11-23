@@ -7,7 +7,7 @@ public static class Db
 {
     public const string ConnectionStringName = "Default";
 
-    /// <summary>Registers a singleton <see cref="NpgsqlDataSource"/> and configures Dapper.</summary>
+    /// <summary>Registers a singleton <see cref="NpgsqlDataSource"/>, the repositories, and configures Dapper.</summary>
     public static IServiceCollection AddDatabase(this IServiceCollection services)
     {
         // users.password_hash -> User.PasswordHash, etc.
@@ -16,6 +16,8 @@ public static class Db
         // Resolved lazily from the final configuration, so test hosts can override the connection string.
         services.AddSingleton(sp =>
             NpgsqlDataSource.Create(sp.GetRequiredService<IConfiguration>().GetRequiredConnectionString()));
+
+        services.AddSingleton<UserRepository>();
 
         return services;
     }

@@ -1,11 +1,63 @@
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Npgsql;
 using TodoApi.Data;
+using TodoApi.Features.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDatabase();
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
+builder.Services.AddValidation();
+builder.Services.AddSingleton<PasswordService>();
+
+// Cookie auth: the browser never exposes the credential to JS, and the SPA is same-origin via the dev proxy.
+builder.Services
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = "todo.auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+            ? CookieSecurePolicy.SameAsRequest
+            : CookieSecurePolicy.Always;
+        options.ExpireTimeSpan = TimeSpan.FromDays(14);
+        options.SlidingExpiration = true;
+
+        // This is an API: answer 401/403 instead of redirecting to a login page.
+        options.Events.OnRedirectToLogin = ctx =>
+        {
+            ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        };
+        options.Events.OnRedirectToAccessDenied = ctx =>
+        {
+            ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        };
+    });
+builder.Services.AddAuthorization();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(AuthEndpoints.RateLimitPolicy, http =>
+    {
+        // Read at request time so the limit can be overridden per host (tests use a high one).
+        var permitLimit = http.RequestServices.GetRequiredService<IConfiguration>()
+            .GetValue("RateLimiting:AuthPermitLimitPerMinute", 20);
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = TimeSpan.FromMinutes(1),
+            });
+    });
+});
 
 var app = builder.Build();
 
@@ -25,6 +77,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+app.UseRateLimiter();
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapGet("/api/health", async (NpgsqlDataSource dataSource, CancellationToken ct) =>
 {
@@ -32,6 +87,8 @@ app.MapGet("/api/health", async (NpgsqlDataSource dataSource, CancellationToken 
     await command.ExecuteScalarAsync(ct);
     return Results.Ok(new { status = "ok" });
 });
+
+app.MapAuthEndpoints();
 
 app.Run();
 
